@@ -2,7 +2,9 @@ mod tagstore;
 
 use std::path::PathBuf;
 
+use anyhow::Context;
 use clap::{Parser, Subcommand};
+use tagstore::TagStore;
 
 #[derive(Parser)]
 struct Cli {
@@ -20,18 +22,30 @@ enum Commands {
     List { tag: String },
 }
 
-fn main() {
+fn print_paths(paths: &Vec<PathBuf>) {
+    for path in paths {
+        println!("{}", path.display());
+    }
+}
+
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    let store = TagStore::new().context("Failed creating tagstore")?;
 
     match cli.command {
-        Commands::Add { tag, path } => {
-            println!("Would add tag '{}' to {}", tag, path.display());
-        }
-        Commands::Remove { tag, path } => {
-            println!("Would remove tag '{}' from {}", tag, path.display());
-        }
-        Commands::List { tag } => {
-            println!("Would list all files tagged with '{}'", tag);
-        }
+        Commands::Add { tag, path } => match store.add_tag(path, &tag) {
+            Ok(()) => println!("Added tag '{}' successfully", tag),
+            Err(e) => eprintln!("Failed to add tag: {:#}", e),
+        },
+        Commands::Remove { tag, path } => match store.remove_tag(path, &tag) {
+            Ok(()) => println!("Removed tag '{}' successfully", tag),
+            Err(e) => eprintln!("Failed to remove tag: {:#}", e),
+        },
+        Commands::List { tag } => match store.list_tagged(&tag) {
+            Ok(paths) => print_paths(&paths),
+            Err(e) => eprintln!("Failed to list tags: {:#}", e),
+        },
     }
+
+    Ok(())
 }
