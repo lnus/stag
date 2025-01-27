@@ -1,14 +1,69 @@
-# ReTag (Name is a work in progress lmao)
+# retag - A Tag Management Tool (WIP 🏗️)
+
+**⚠️ SECRET FRIENDS AND FAMILY EDITION ⚠️** 
+
+![anime girl dancing](https://i.giphy.com/11lxCeKo6cHkJy.webp) 
+
+## Name suggestions
+
+Oh my god please give me name suggestions
+
+### 🐧 inspo
+
+1. stag (S-tag)
+    - It sounds really cool
+    - Stag/deer iconography could be used, wow
+    - It literally has tag in the name
+    - It's not me trying to be japanese and cringe
+    - Memorable
+    - Feels super good to write, left hand only touch type
+    - I think this is the one I'm going for
+
+1. tagr
+    - Terse, memorable
+    - Follows Unix tool naming conventions
+    - Easy to type
+    - Clear purpose
+
+2. tg
+    - Ultra-minimal
+    - Very easy to type
+    - Might be too generic/clash with other tools
+
+### 日本語 inspo
+
+1. タグ (tagu) 
+    - means tag, literally, note or tag
+    - ehhhh? kinda cringu　キモイ core if you ask me
+
+2. 整理 / せいり / セイリ (seiri, katakana for style points) 
+    - is better, more obscurish, means organization
+    - organization/tagging/sorting, pretty good vibes in general
+    - semi annoying to type
+    - could alias the binary to sei/sri etc..?
+    - con: surprisingly also means menstruation 生理, huh. who knew.
+
+3. 分類 / ぶんるい / ブンルイ (bunrui)
+    - literally means classification
+    - sounds kinda cool
+    - annoying to type
 
 ## Installation
 
-For now just `git clone https://github.com/lnus/retag.git` and do:
+1. Clone this repository.
+2. Run `cargo install --path .`
+3. Check if `which retag` works
+4. If yes, good to go baby 😎
 
 ```bash
 cargo install --path .
 ```
 
-*It's a private repo for god sake*
+### Requirements
+
+- Rust Version: 🤔 I'm running `rustc 1.83.0`, so that or higher I guess.
+    - I'm 99% sure any 2021 version should work.
+- Just get [rustup](https://rustup.rs/) and install latest.
 
 ## Usage
 
@@ -122,11 +177,3 @@ retag s proj rust --dirs | xargs -I{} cargo test --manifest-path {}/Cargo.toml
 - Combine with fzf for interactive filtering
 - Directory tagging is default, use -r for recursive file tagging
 - Searches use AND by default, use --any for OR operation
-
-## Development
-
-Quick binding for building and testing
-
-```bash
-cargo install --path .
-```
