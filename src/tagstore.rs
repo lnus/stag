@@ -38,7 +38,7 @@ impl TagStore {
     }
 
     pub fn new() -> anyhow::Result<Self> {
-        let proj_dirs = ProjectDirs::from("com", "retag", "retag")
+        let proj_dirs = ProjectDirs::from("com", "stag", "stag")
             .ok_or_else(|| anyhow::anyhow!("Could not determine project directories"))?;
 
         let data_dir = proj_dirs.data_dir();
