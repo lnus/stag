@@ -20,12 +20,16 @@ enum Commands {
         tag: String,
         #[clap(required = true, num_args = 1..)]
         paths: Vec<PathBuf>,
+        #[clap(short, long)]
+        recursive: bool,
     },
     #[command(alias = "rm")]
     Remove {
         tag: String,
         #[clap(required = true, num_args = 1..)]
         paths: Vec<PathBuf>,
+        #[clap(short, long)]
+        recursive: bool,
     },
     #[command(alias = "ls")]
     List { tag: String },
@@ -33,8 +37,8 @@ enum Commands {
     Search {
         #[clap(required = true, num_args = 1..)]
         tags: Vec<String>,
-        #[clap(long, default_value = "any")]
-        mode: String,
+        #[clap(long)]
+        any: bool,
     },
 }
 
@@ -54,19 +58,25 @@ fn handle_paths(
     tag: &str,
     paths: Vec<PathBuf>,
     action: PathAction,
+    recursive: bool,
 ) -> anyhow::Result<()> {
-    let paths: Vec<_> = paths
-        .iter()
-        .flat_map(|path_pattern| {
-            // TODO: .hidden(false), I think it's good to respect gitignore? Could have this
-            // configable behaviour
-            WalkBuilder::new(path_pattern)
-                .build()
-                .filter_map(Result::ok)
-                .map(|entry| entry.path().to_path_buf())
-                .collect::<Vec<_>>()
-        })
-        .collect();
+    // TODO: Consider hidden(false)
+    // I think it's good to respect gitignore?
+    // Could have this as a config flag
+    let paths: Vec<_> = if recursive {
+        paths
+            .iter()
+            .flat_map(|path_pattern| {
+                WalkBuilder::new(path_pattern)
+                    .build()
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.path().to_path_buf())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    } else {
+        paths.into_iter().collect()
+    };
 
     match action {
         PathAction::Add => store.add_tags_batch(&paths, &tag)?,
@@ -81,24 +91,33 @@ fn main() -> anyhow::Result<()> {
     let mut store = TagStore::new().context("Failed creating tagstore")?;
 
     match cli.command {
-        Commands::Add { tag, paths } => {
-            handle_paths(&mut store, &tag, paths.clone(), PathAction::Add)?
-        }
-        Commands::Remove { tag, paths } => {
-            handle_paths(&mut store, &tag, paths.clone(), PathAction::Remove)?
-        }
+        Commands::Add {
+            tag,
+            paths,
+            recursive,
+        } => handle_paths(&mut store, &tag, paths.clone(), PathAction::Add, recursive)?,
+        Commands::Remove {
+            tag,
+            paths,
+            recursive,
+        } => handle_paths(
+            &mut store,
+            &tag,
+            paths.clone(),
+            PathAction::Remove,
+            recursive,
+        )?,
         Commands::List { tag } => {
             if let Ok(paths) = store.list_tagged(&tag) {
                 print_paths(&paths);
             }
         }
-        Commands::Search { tags, mode } => {
-            let mode = match mode.as_str() {
-                "all" => SearchMode::All,
-                "any" => SearchMode::Any,
-                _ => return Err(anyhow::anyhow!("Invalid search mode. Use 'all' or 'any'")),
+        Commands::Search { tags, any } => {
+            let mode = if any {
+                SearchMode::Any
+            } else {
+                SearchMode::All
             };
-
             let tag_refs: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
             if let Ok(paths) = store.search_tags(&tag_refs, mode) {
                 print_paths(&paths);
