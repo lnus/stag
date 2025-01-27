@@ -1,0 +1,1 @@
+alias retag="cargo run --"
