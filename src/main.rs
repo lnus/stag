@@ -32,13 +32,23 @@ enum Commands {
         recursive: bool,
     },
     #[command(alias = "ls")]
-    List { tag: String },
+    List {
+        tag: String,
+        #[clap(long)]
+        dirs: bool,
+        #[clap(long)]
+        files: bool,
+    },
     #[command(alias = "s")]
     Search {
         #[clap(required = true, num_args = 1..)]
         tags: Vec<String>,
         #[clap(long)]
         any: bool,
+        #[clap(long)]
+        dirs: bool,
+        #[clap(long)]
+        files: bool,
     },
 }
 
@@ -86,6 +96,27 @@ fn handle_paths(
     Ok(())
 }
 
+// NOTE: Maybe this should be moved into the SQL layer?
+// However this function is pretty ripping fast O(n) so whatever?
+fn filter_paths(paths: Vec<PathBuf>, dirs_only: bool, files_only: bool) -> Vec<PathBuf> {
+    if !dirs_only && !files_only {
+        return paths;
+    }
+
+    paths
+        .into_iter()
+        .filter(|p| {
+            if dirs_only {
+                p.is_dir()
+            } else if files_only {
+                p.is_file()
+            } else {
+                true
+            }
+        })
+        .collect()
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let mut store = TagStore::new().context("Failed creating tagstore")?;
@@ -107,12 +138,25 @@ fn main() -> anyhow::Result<()> {
             PathAction::Remove,
             recursive,
         )?,
-        Commands::List { tag } => {
+        Commands::List { tag, dirs, files } => {
+            if dirs && files {
+                return Err(anyhow::anyhow!("Cannot specify both --dirs and --files"));
+            }
+
             if let Ok(paths) = store.list_tagged(&tag) {
-                print_paths(&paths);
+                print_paths(&filter_paths(paths, dirs, files));
             }
         }
-        Commands::Search { tags, any } => {
+        Commands::Search {
+            tags,
+            any,
+            dirs,
+            files,
+        } => {
+            if dirs && files {
+                return Err(anyhow::anyhow!("Cannot specify both --dirs and --files"));
+            }
+
             let mode = if any {
                 SearchMode::Any
             } else {
@@ -120,7 +164,7 @@ fn main() -> anyhow::Result<()> {
             };
             let tag_refs: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
             if let Ok(paths) = store.search_tags(&tag_refs, mode) {
-                print_paths(&paths);
+                print_paths(&filter_paths(paths, dirs, files));
             }
         }
     }
