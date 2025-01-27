@@ -5,10 +5,7 @@
 Quick binding for building and testing
 
 ```bash
-retag() {
-    PROJECT_LOCATION="$HOME/...some_dir.../retag"
-    (cd "$PROJECT_LOCATION" && cargo run -- "$@")
-}
+cargo install --path .
 ```
 
 haha actually none of this is true any more since I just added

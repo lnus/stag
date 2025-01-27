@@ -43,6 +43,7 @@ impl TagStore {
         Ok(Self { conn })
     }
 
+    #[allow(dead_code)]
     pub fn add_tag(&self, path: PathBuf, tag: &str) -> anyhow::Result<()> {
         let path_str = path.canonicalize()?.to_string_lossy().to_string();
 
@@ -63,6 +64,7 @@ impl TagStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn remove_tag(&self, path: PathBuf, tag: &str) -> anyhow::Result<()> {
         let path_str = path.canonicalize()?.to_string_lossy().to_string();
 
@@ -101,6 +103,57 @@ impl TagStore {
             .context("Failed to collect paths from query")?;
 
         Ok(paths)
+    }
+
+    pub fn add_tags_batch(&mut self, paths: &[PathBuf], tag: &str) -> anyhow::Result<()> {
+        let tx = self.conn.transaction()?;
+        {
+            let mut files_stmt = tx.prepare("INSERT OR IGNORE INTO files (path) VALUES (?1)")?;
+
+            let mut tags_stmt =
+                tx.prepare("INSERT OR IGNORE INTO tags (file_path, tag) VALUES (?1, ?2)")?;
+
+            for path in paths {
+                let path_str = path.canonicalize()?.to_string_lossy().to_string();
+
+                files_stmt
+                    .execute([&path_str])
+                    .context("Failed inserting into table 'files'")?;
+
+                tags_stmt
+                    .execute([&path_str, tag])
+                    .context("Failed inserting into table 'tags'")?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn remove_tags_batch(&mut self, paths: &[PathBuf], tag: &str) -> anyhow::Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            // Prepare statements once for reuse
+            let mut tags_stmt = tx.prepare("DELETE FROM tags WHERE file_path = ?1 AND tag = ?2")?;
+
+            let mut cleanup_stmt = tx.prepare(
+                "DELETE FROM files WHERE path = ?1 
+         AND NOT EXISTS (SELECT 1 FROM tags WHERE file_path = ?1)",
+            )?;
+
+            for path in paths {
+                let path_str = path.canonicalize()?.to_string_lossy().to_string();
+
+                tags_stmt
+                    .execute([&path_str, tag])
+                    .context("Failed to remove tag")?;
+
+                cleanup_stmt
+                    .execute([&path_str])
+                    .context("Failed to clean up files table")?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
     }
 }
 
