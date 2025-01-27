@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
+use directories::ProjectDirs;
 use rusqlite::Connection;
 
 pub struct TagStore {
@@ -30,10 +31,14 @@ impl TagStore {
     }
 
     pub fn new() -> anyhow::Result<Self> {
-        // FIXME: Create this in a better location
-        // Possibly make it configurable using
-        // $XDG_CONFIG_HOME
-        let conn = Connection::open("tags.db")?;
+        let proj_dirs = ProjectDirs::from("com", "retag", "retag")
+            .ok_or_else(|| anyhow::anyhow!("Could not determine project directories"))?;
+
+        let data_dir = proj_dirs.data_dir();
+        std::fs::create_dir_all(data_dir).context("Failed the create data directory")?;
+
+        let db_path = data_dir.join("tags.db");
+        let conn = Connection::open(db_path)?;
         Self::init_db(&conn)?;
         Ok(Self { conn })
     }

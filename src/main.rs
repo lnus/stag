@@ -22,7 +22,7 @@ enum Commands {
     List { tag: String },
 }
 
-fn print_paths(paths: &Vec<PathBuf>) {
+fn print_paths(paths: &[PathBuf]) {
     for path in paths {
         println!("{}", path.display());
     }

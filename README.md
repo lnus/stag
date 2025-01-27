@@ -2,6 +2,15 @@
 
 ## Development
 
+Quick binding for building and testing
+
+```bash
+retag() {
+    PROJECT_LOCATION="$HOME/...some_dir.../retag"
+    (cd "$PROJECT_LOCATION" && cargo run -- "$@")
+}
+```
+
 haha actually none of this is true any more since I just added
 `features = ["bundled"]` to the cargo.toml :D
 
