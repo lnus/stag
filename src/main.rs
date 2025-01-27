@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use ignore::WalkBuilder;
-use tagstore::TagStore;
+use tagstore::{SearchMode, TagStore};
 
 #[derive(Parser)]
 struct Cli {
@@ -29,6 +29,13 @@ enum Commands {
     },
     #[command(alias = "ls")]
     List { tag: String },
+    #[command(alias = "s")]
+    Search {
+        #[clap(required = true, num_args = 1..)]
+        tags: Vec<String>,
+        #[clap(long, default_value = "any")]
+        mode: String,
+    },
 }
 
 fn print_paths(paths: &[PathBuf]) {
@@ -51,8 +58,9 @@ fn handle_paths(
     let paths: Vec<_> = paths
         .iter()
         .flat_map(|path_pattern| {
+            // TODO: .hidden(false), I think it's good to respect gitignore? Could have this
+            // configable behaviour
             WalkBuilder::new(path_pattern)
-                .hidden(false)
                 .build()
                 .filter_map(Result::ok)
                 .map(|entry| entry.path().to_path_buf())
@@ -81,6 +89,18 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::List { tag } => {
             if let Ok(paths) = store.list_tagged(&tag) {
+                print_paths(&paths);
+            }
+        }
+        Commands::Search { tags, mode } => {
+            let mode = match mode.as_str() {
+                "all" => SearchMode::All,
+                "any" => SearchMode::Any,
+                _ => return Err(anyhow::anyhow!("Invalid search mode. Use 'all' or 'any'")),
+            };
+
+            let tag_refs: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
+            if let Ok(paths) = store.search_tags(&tag_refs, mode) {
                 print_paths(&paths);
             }
         }

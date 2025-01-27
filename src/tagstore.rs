@@ -2,10 +2,17 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use directories::ProjectDirs;
-use rusqlite::Connection;
+use rusqlite::{params_from_iter, Connection};
 
 pub struct TagStore {
     conn: Connection,
+}
+
+pub enum SearchMode {
+    /// AND
+    All,
+    /// OR
+    Any,
 }
 
 impl TagStore {
@@ -87,6 +94,34 @@ impl TagStore {
         Ok(())
     }
 
+    pub fn search_tags(&self, tags: &[&str], mode: SearchMode) -> anyhow::Result<Vec<PathBuf>> {
+        let query = match mode {
+            SearchMode::All => {
+                let conditions = (0..tags.len())
+                    .map(|i| format!("EXISTS (SELECT 1 FROM tags t{} WHERE t{}.file_path = files.path AND t{}.tag = ?{})", i, i, i, i+1))
+                    .collect::<Vec<_>>()
+                    .join(" AND ");
+                format!("SELECT DISTINCT path FROM files WHERE {}", conditions)
+            }
+            SearchMode::Any => {
+                let placeholders = (1..=tags.len())
+                    .map(|i| format!("?{}", i))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("SELECT DISTINCT files.path FROM files JOIN tags ON files.path = tags.file_path WHERE tags.tag IN ({})", placeholders)
+            }
+        };
+
+        let mut stmt = self.conn.prepare(&query)?;
+        let paths = stmt
+            .query_map(params_from_iter(tags), |row| {
+                Ok(PathBuf::from(row.get::<_, String>(0)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(paths)
+    }
+
     pub fn list_tagged(&self, tag: &str) -> anyhow::Result<Vec<PathBuf>> {
         let mut stmt = self
             .conn
@@ -130,7 +165,7 @@ impl TagStore {
     }
 
     pub fn remove_tags_batch(&mut self, paths: &[PathBuf], tag: &str) -> anyhow::Result<()> {
-        let tx = self.conn.unchecked_transaction()?;
+        let tx = self.conn.transaction()?;
         {
             // Prepare statements once for reuse
             let mut tags_stmt = tx.prepare("DELETE FROM tags WHERE file_path = ?1 AND tag = ?2")?;
