@@ -1,5 +1,13 @@
 # stag 🦌 - (S)tag Management Tool (WIP 🏗️)
 
+<p align="center">
+    <img src="https://c.tenor.com/r5c67WCHZZcAAAAC/tenor.gif" alt="Are you ready to become a stag"> 
+</p>
+
+<p align="center">
+    <strong>⚠️ SECRET FRIENDS AND FAMILY EDITION ⚠️</strong>
+</p>
+
 Q: What does the S stand for?
 A:
 - Super
@@ -9,10 +17,6 @@ A:
 - Stag (recursive)
 - Simpsons
 - Something else entirely
-
-**⚠️ SECRET FRIENDS AND FAMILY EDITION ⚠️** 
-
-![anime girl dancing](https://i.giphy.com/11lxCeKo6cHkJy.webp) 
 
 ## Installation
 
