@@ -1,14 +1,14 @@
-<h1 align="center">
-    stag 🦌 | WIP 🏗️
-</h1>
+<p align="center">
+    <img width="300" src="https://c.tenor.com/r5c67WCHZZcAAAAC/tenor.gif" alt="Are you ready to become a stag">
+    <h1 align="center">stag 🦌 | WIP 🏗️</h1>
+</p>
+<p align="center">
+    <a href="https://github.com/lnus/stag/actions/workflows/rust.yml">
+        <img src="https://github.com/lnus/stag/actions/workflows/rust.yml/badge.svg" alt="Rust CI">
+    </a> <!-- look ma, CI! -->
+</p>
 <p align="center">
     (S)Tag Management Tool
-</p>
-<p align="center">
-    <img src="https://c.tenor.com/r5c67WCHZZcAAAAC/tenor.gif" alt="Are you ready to become a stag"> 
-</p>
-<p align="center">
-    <strong>⚠️ SECRET FRIENDS AND FAMILY EDITION ⚠️</strong>
 </p>
 
 Q: What does the **S** stand for?
