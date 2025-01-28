@@ -22,6 +22,8 @@ enum Commands {
         paths: Vec<PathBuf>,
         #[clap(short, long)]
         recursive: bool,
+        #[clap(long)] // FIX: Think of a good short bind that doesn't overlap help
+        hidden: bool,
     },
     #[command(alias = "rm")]
     Remove {
@@ -30,6 +32,8 @@ enum Commands {
         paths: Vec<PathBuf>,
         #[clap(short, long)]
         recursive: bool,
+        #[clap(long)] // FIX: Think of a good short bind that doesn't overlap help
+        hidden: bool,
     },
     #[command(alias = "ls")]
     List {
@@ -71,15 +75,21 @@ fn handle_paths(
     paths: Vec<PathBuf>,
     action: PathAction,
     recursive: bool,
+    hidden: bool,
 ) -> anyhow::Result<()> {
-    // TODO: Consider hidden(false)
-    // I think it's good to respect gitignore?
-    // Could have this as a config flag
+    // NOTE: Hidden flag only applies for recursive indexing
+    // It doesn't really make sense if someone does ie.
+    // `stag a tag .hidden` and it doesn't index.
+    // Hidden is more for:
+    // `stag a config .config -r --hidden`, which will now recurse
+    // .config and add ALL files no matter ignore-rules
+    // FIX: Document this better ^
     let paths: Vec<_> = if recursive {
         paths
             .iter()
             .flat_map(|path_pattern| {
                 WalkBuilder::new(path_pattern)
+                    .hidden(!hidden)
                     .build()
                     .filter_map(Result::ok)
                     .map(|entry| entry.path().to_path_buf())
@@ -124,22 +134,33 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let mut store = TagStore::new().context("Failed creating tagstore")?;
 
+    // FIX: The formatting of this is pretty ugly
     match cli.command {
         Commands::Add {
             tag,
             paths,
             recursive,
-        } => handle_paths(&mut store, &tag, paths.clone(), PathAction::Add, recursive)?,
+            hidden,
+        } => handle_paths(
+            &mut store,
+            &tag,
+            paths.clone(),
+            PathAction::Add,
+            recursive,
+            hidden,
+        )?,
         Commands::Remove {
             tag,
             paths,
             recursive,
+            hidden,
         } => handle_paths(
             &mut store,
             &tag,
             paths.clone(),
             PathAction::Remove,
             recursive,
+            hidden,
         )?,
         Commands::List { tag, dirs, files } => {
             if dirs && files {

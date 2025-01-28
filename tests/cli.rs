@@ -325,3 +325,65 @@ fn test_complex_search_combinations() -> anyhow::Result<()> {
         Ok(())
     })
 }
+
+#[test]
+#[serial]
+fn test_hidden_files_handling() -> anyhow::Result<()> {
+    // NOTE: This test looks weird, see note in `main.rs` about hidden
+    with_test_env(|| {
+        let temp_dir = TempDir::new()?;
+
+        let hidden_file = temp_dir.path().join(".hidden.txt");
+        let hidden_dir = temp_dir.path().join(".hidden_dir");
+        let normal_file_1 = temp_dir.path().join("normal2.txt");
+        let normal_file_2 = hidden_dir.as_path().join("normal2.txt");
+
+        std::fs::write(&hidden_file, "hidden content")?; // root
+        std::fs::write(&normal_file_1, "normal content")?; // root
+        std::fs::create_dir(&hidden_dir)?; // root
+        std::fs::write(&normal_file_2, "normal content")?; // inside hidden dir
+
+        let hidden_file_path = normalize_path(&hidden_file)?;
+        let hidden_dir_path = normalize_path(&hidden_dir)?;
+        let normal_file_1_path = normalize_path(&normal_file_1)?;
+        let normal_file_2_path = normalize_path(&normal_file_2)?;
+
+        // Should ignore hidden files
+        Command::cargo_bin("stag")?
+            .args(["a", "test", &temp_dir.path().to_string_lossy(), "-r"])
+            .assert()
+            .success();
+
+        Command::cargo_bin("stag")?
+            .args(["ls", "test"])
+            .assert()
+            .success()
+            .stdout(predicates::str::contains(&hidden_file_path).not())
+            .stdout(predicates::str::contains(&hidden_dir_path).not())
+            .stdout(predicates::str::contains(&normal_file_2_path).not())
+            .stdout(predicates::str::contains(&normal_file_1_path));
+
+        // Should recurse and find hidden files
+        Command::cargo_bin("stag")?
+            .args([
+                "a",
+                "hidden",
+                &temp_dir.path().to_string_lossy(),
+                "-r",
+                "--hidden",
+            ])
+            .assert()
+            .success();
+
+        Command::cargo_bin("stag")?
+            .args(["ls", "hidden"])
+            .assert()
+            .success()
+            .stdout(predicates::str::contains(&hidden_file_path))
+            .stdout(predicates::str::contains(&hidden_dir_path))
+            .stdout(predicates::str::contains(&normal_file_2_path))
+            .stdout(predicates::str::contains(&normal_file_1_path));
+
+        Ok(())
+    })
+}

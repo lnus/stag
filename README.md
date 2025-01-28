@@ -1,27 +1,35 @@
 <p align="center">
     <img width="300" src="https://c.tenor.com/r5c67WCHZZcAAAAC/tenor.gif" alt="Are you ready to become a stag">
-    <h1 align="center">stag 🦌 | WIP 🏗️</h1>
+    <h1 align="center">stag 🦌</h1>
+</p>
+<p align="center">
+    (S)Tag Management Tool | Very work in progress 🚧
 </p>
 <p align="center">
     <a href="https://github.com/lnus/stag/actions/workflows/rust.yml">
         <img src="https://github.com/lnus/stag/actions/workflows/rust.yml/badge.svg" alt="Rust CI">
     </a> <!-- look ma, CI! -->
 </p>
-<p align="center">
-    (S)Tag Management Tool
-</p>
 
 Q: What does the **S** stand for?
 
-A:
+A: Super, Storage, Sorting, System, Stag (recursive)
 
-- Super
-- Sorting
-- Storage
-- System
-- Stag (recursive)
-- Simpsons
-- Something else entirely
+## TODO's and scope creep 🛠️
+
+- [x] feat: Add negations in search
+- [ ] feat: Add a validate/clean command for broken tag-links
+- [ ] feat: Add metadata based autotagging (filetype, size, etc...)
+- [ ] feat: Some directory wathing, this is a huge _maybe_
+- [ ] feat: A display of all current active tags
+- [ ] feat: Graph visualisation of all current active tags?
+- [ ] feat/fix: Add config from `$XDG_CONFIG_HOME`
+- [ ] fix: Validate tag names and CaSeS of them
+- [ ] perf: Make negations in search faster, this is slow for large searches
+- [ ] perf: Fix a bunch of the SQL queries in general
+- [ ] perf: Do all of the filtering directly in the SQL, rather than after (should be faster?)
+- [ ] refactor: Clean up the SQL queries, they are a pain to read
+- [ ] refactor: Split up stuff more cleanly (if needed)
 
 ## Installation
 
@@ -40,22 +48,6 @@ cargo install --path .
   - I'm 99% sure any 2021 version should work.
 - Just get [rustup](https://rustup.rs/) and install latest.
 
-## TODO's and scope creep 🛠️
-
-- [x] feat: Add negations in search
-- [ ] feat: Add a validate/clean command for broken tag-links
-- [ ] feat: Add metadata based autotagging (filetype, size, etc...)
-- [ ] feat: Some directory wathing, this is a huge _maybe_
-- [ ] feat: A display of all current active tags
-- [ ] feat: Graph visualisation of all current active tags?
-- [ ] feat/fix: Add config from `$XDG_CONFIG_HOME`
-- [ ] fix: Validate tag names and CaSeS of them
-- [ ] perf: Make negations in search faster, this is slow for large searches
-- [ ] perf: Fix a bunch of the SQL queries in general
-- [ ] perf: Do all of the filtering directly in the SQL, rather than after (should be faster?)
-- [ ] refactor: Clean up the SQL queries, they are a pain to read
-- [ ] refactor: Split up stuff more cleanly (if needed)
-
 ## Usage
 
 ### Basic Tag Management
@@ -66,11 +58,16 @@ stag a proj ~/Projects/* # All/* now has the tag proj
 stag a rust ~/Projects/my-rust-project # This now has the tags proj && rust
 
 # Recursively tag all files in directory
-stag a -r rust ~/Projects/my-rust-project # All files in my-rust-project now have the tag rust
+stag a rust ~/Projects/my-rust-project -r # All files in my-rust-project now have the tag rust
+
+# Recursively tag hidden files (dotfiles, gitignore/ignored files)
+# TODO: This behaviour needs better documentation
+stag a config ~/.config -r --hidden # Will tag files that are ignored by default
 
 # Remove tags (same as above applies, in reverse)
 stag rm rust ~/Projects/old-project
-stag rm -r docs ~/Projects/*/docs
+stag rm docs ~/Projects/*/docs -r
+stag rm config ~/.config -r --hidden
 ```
 
 ### Searching and Filtering
@@ -86,7 +83,7 @@ stag s proj --files   # Only show files
 # Find Rust projects
 stag s proj rust
 
-# Find projects that NOT rust
+# Find projects that are NOT rust
 stag s proj -e rust
 
 # Find anything tagged either rust or docs (OR search)
@@ -96,23 +93,6 @@ stag s rust docs --any
 stag ls docs
 stag ls docs --dirs   # Only directories
 stag ls docs --files  # Only files
-```
-
-### Shell Integration
-
-```bash
-# Quick project navigation function
-scd() {
-    local tags="${1:-proj}"  # Default to 'proj' if no args
-    local dir=$(stag s $tags --dirs | fzf)
-    if [ -n "$dir" ]; then
-        cd "$dir"
-    fi
-}
-
-# Usage:
-rcd                    # Navigate tagged projects
-rcd "rust wip"         # Navigate WIP Rust projects
 ```
 
 ### Combining with Unix Tools
@@ -143,6 +123,23 @@ stag s proj rust --dirs | xargs -I{} cargo fmt --manifest-path {}/Cargo.toml
 
 # Test all Rust projects
 stag s proj rust --dirs | xargs -I{} cargo test --manifest-path {}/Cargo.toml
+```
+
+### Shell Integration
+
+```bash
+# Quick project navigation function
+scd() {
+local tags="${1:-proj}"  # Default to 'proj' if no args
+local dir=$(stag s $tags --dirs | fzf)
+if [ -n "$dir" ]; then
+cd "$dir"
+fi
+}
+
+# Usage:
+rcd                    # Navigate tagged projects
+rcd "rust wip"         # Navigate WIP Rust projects
 ```
 
 ### Tips
