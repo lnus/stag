@@ -108,9 +108,6 @@ fn handle_paths(
     Ok(())
 }
 
-// NOTE: Maybe this should be moved into the SQL layer?
-// However this function is pretty ripping fast O(n) so whatever?
-// Doing it in SQL is pretty much always better, but writing SQL is a pain
 fn filter_paths(paths: Vec<PathBuf>, dirs_only: bool, files_only: bool) -> Vec<PathBuf> {
     if !dirs_only && !files_only {
         return paths;
@@ -182,11 +179,6 @@ fn main() -> anyhow::Result<()> {
                 return Err(anyhow::anyhow!("Cannot specify both --dirs and --files"));
             }
 
-            // FIXME: Exclude tags should be calced in SQL
-            // However this is a pain in the ass.
-            // So for now, we get all, then exclude after.
-            // It's ugly and slower, but at least it works.
-            // See `TagStore::search_tags` for details
             let include_tags: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
             let exclude_tags: Vec<&str> = exclude.iter().map(|s| s.as_str()).collect();
 

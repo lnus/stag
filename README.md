@@ -20,15 +20,14 @@ A: Super, Storage, Sorting, System, Stag (recursive)
 - [x] feat: Add negations in search
 - [ ] feat: Add a validate/clean command for broken tag-links
 - [ ] feat: Add metadata based autotagging (filetype, size, etc...)
-- [ ] feat: Some directory wathing, this is a huge _maybe_
+- [ ] feat: Some directory watching, this is a huge _maybe_
 - [ ] feat: A display of all current active tags
 - [ ] feat: Graph visualisation of all current active tags?
 - [ ] feat/fix: Add config from `$XDG_CONFIG_HOME`
 - [ ] fix: Validate tag names and CaSeS of them
-- [ ] perf: Make negations in search faster, this is slow for large searches
-- [ ] perf: Fix a bunch of the SQL queries in general
-- [ ] perf: Do all of the filtering directly in the SQL, rather than after (should be faster?)
-- [ ] refactor: Clean up the SQL queries, they are a pain to read
+- [x] perf: Make negations in search faster, this is slow for large searches
+- [x] perf: Fix a bunch of the SQL queries in general
+- [x] refactor: Clean up the SQL queries, they are a pain to read
 - [ ] refactor: Split up stuff more cleanly (if needed)
 
 ## Installation

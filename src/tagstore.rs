@@ -1,42 +1,61 @@
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::path::PathBuf;
 
-use anyhow::Context;
+use anyhow::{Context, Result};
 use directories::ProjectDirs;
-use rusqlite::{params_from_iter, Connection};
+use rusqlite::{params, params_from_iter, Connection, ToSql, Transaction};
 
 pub struct TagStore {
     conn: Connection,
 }
 
 impl TagStore {
-    fn init_db(conn: &Connection) -> anyhow::Result<()> {
+    fn init_db(conn: &Connection) -> Result<()> {
+        // NOTE: Using `PRAGMA auto_vacuum = FULL` will automatically reclaim space when records are deleted.
+        // This has a small performance overhead but keeps the database file size minimal.
+        // If storage becomes an issue, consider re-adding this
+        // After running a few tests I've noticed it doesn't really matter for size
+        // conn.execute("PRAGMA auto_vacuum = FULL", [])?;
+
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY)",
-            (),
+            "CREATE TABLE IF NOT EXISTS files (
+                id      INTEGER PRIMARY KEY,
+                path    TEXT NOT NULL UNIQUE
+            )",
+            [],
         )
         .context("Failed creating table 'files'")?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS tags (
-                file_path TEXT,
-                tag TEXT,
-                PRIMARY KEY (file_path, tag),
-                FOREIGN KEY(file_path) REFERENCES files(path)
+                id      INTEGER PRIMARY KEY,
+                name    TEXT NOT NULL UNIQUE
             )",
-            (),
+            [],
         )
         .context("Failed creating table 'tags'")?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS file_tags (
+                file_id INTEGER,
+                tag_id  INTEGER,
+                PRIMARY KEY (file_id, tag_id),
+                FOREIGN KEY (file_id)   REFERENCES files(id)    ON DELETE CASCADE,
+                FOREIGN KEY (tag_id)    REFERENCES tags(id)     ON DELETE CASCADE
+            )",
+            [],
+        )
+        .context("Failed creating table 'file_tags'")?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag_id)",
+            [],
+        )
+        .context("Failed creating indexes for 'file_tags'")?;
 
         Ok(())
     }
 
     pub fn new() -> anyhow::Result<Self> {
-        // NOTE: This is primarily for integration testing.
-        // But you can also use it outside of it.
-        // Not fully supported yet but it should work fine.
         let conn = if let Ok(path) = std::env::var("STAG_DB_PATH") {
             Connection::open(path)?
         } else {
@@ -53,151 +72,150 @@ impl TagStore {
         Ok(Self { conn })
     }
 
-    // TODO: This is so unreadable and ugly
-    // Maybe we should separate some queries out into SQL files...
-    pub fn search_tags(
-        &self,
-        tags: &[&str],
-        excluded: &[&str],
-        any: bool,
-    ) -> anyhow::Result<Vec<PathBuf>> {
-        if tags.is_empty() {
-            return Ok(Vec::new());
+    // NOTE: Helper / Internal functions
+    fn get_or_create_tag(tx: &Transaction, tag: &str) -> Result<i64> {
+        let mut stmt = tx.prepare("INSERT OR IGNORE INTO tags (name) VALUES (?1)")?;
+        stmt.execute([tag])?;
+
+        let mut stmt = tx.prepare("SELECT id FROM tags WHERE name = ?1")?;
+        Ok(stmt.query_row([tag], |row| row.get(0))?)
+    }
+
+    fn get_or_create_file(tx: &Transaction, path: &PathBuf) -> Result<i64> {
+        if !path.exists() {
+            return Err(anyhow::anyhow!(
+                "Path does not exist: {}",
+                path.to_string_lossy()
+            ));
         }
 
-        let query = if any {
-            let placeholders = (1..=tags.len())
-                .map(|i| format!("?{}", i))
-                .collect::<Vec<_>>()
-                .join(",");
-            format!(
-                "SELECT DISTINCT files.path FROM files JOIN tags \
-                    ON files.path = tags.file_path \
-                    WHERE tags.tag IN ({})",
-                placeholders
-            )
-        } else {
-            let conditions = (0..tags.len())
-                .map(|i| {
-                    format!(
-                        "EXISTS (SELECT 1 FROM tags t{} \
-                            WHERE t{}.file_path = files.path \
-                            AND t{}.tag = ?{})",
-                        i,
-                        i,
-                        i,
-                        i + 1
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(" AND ");
-            format!("SELECT DISTINCT path FROM files WHERE {}", conditions)
-        };
+        let canonical_path = path.canonicalize().context("Failed to canonicalize path")?;
+        let path_str = canonical_path.to_string_lossy();
 
-        let mut stmt = self.conn.prepare(&query)?;
+        let mut stmt = tx.prepare("INSERT OR IGNORE INTO files (path) VALUES (?1)")?;
+        stmt.execute([&path_str])?;
+
+        let mut stmt = tx.prepare("SELECT id FROM files WHERE path = ?1")?;
+        Ok(stmt.query_row([&path_str], |row| row.get(0))?)
+    }
+
+    // NOTE: Public API functions
+    pub fn add_tags_batch(&mut self, paths: &[PathBuf], tag: &str) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        {
+            let tag_id = Self::get_or_create_tag(&tx, tag)?;
+
+            for path in paths {
+                let file_id = Self::get_or_create_file(&tx, path)?;
+                tx.execute(
+                    "INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?1, ?2)",
+                    params![file_id, tag_id],
+                )?;
+            }
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn remove_tags_batch(&mut self, paths: &[PathBuf], tag: &str) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "DELETE FROM file_tags
+                WHERE file_id IN (SELECT id FROM files WHERE path = ?1)
+                AND tag_id IN (SELECT id FROM tags WHERE name = ?2)",
+            )?;
+
+            for path in paths {
+                let canonical_path = path.canonicalize().context("Failed to canonicalize path")?;
+                stmt.execute(params![canonical_path.to_string_lossy(), tag])?;
+            }
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn list_tagged(&self, tag: &str) -> Result<Vec<PathBuf>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT f.path FROM files f
+             JOIN file_tags ft ON f.id = ft.file_id
+             JOIN tags t ON ft.tag_id = t.id
+             WHERE t.name = ?1",
+        )?;
+
         let paths = stmt
-            .query_map(params_from_iter(tags), |row| {
-                Ok(PathBuf::from(row.get::<_, String>(0)?))
+            .query_map([tag], |row| {
+                let path_str: String = row.get(0)?;
+                Ok(PathBuf::from(path_str))
             })?
             .collect::<Result<Vec<_>, _>>()?;
-
-        // FIXME: This is giga-fugly filtering
-        // But as long as it works, I'm kind of happy.
-        // This does n SQL queries for tags...
-        // Using -exclude is a performance loss now
-        let filtered_paths = paths
-            .into_iter()
-            .filter(|path| {
-                let path_tags = self.get_tags(path).unwrap_or_default();
-                !excluded
-                    .iter()
-                    .any(|&exclude_tag| path_tags.contains(exclude_tag))
-            })
-            .collect();
-
-        Ok(filtered_paths)
-    }
-
-    fn get_tags(&self, path: &Path) -> anyhow::Result<HashSet<String>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT tag FROM tags WHERE file_path = ?")?;
-        let tags = stmt
-            .query_map([path.to_string_lossy().as_ref()], |row| {
-                row.get::<_, String>(0)
-            })?
-            .filter_map(Result::ok)
-            .collect();
-        Ok(tags)
-    }
-
-    pub fn list_tagged(&self, tag: &str) -> anyhow::Result<Vec<PathBuf>> {
-        let mut stmt = self
-            .conn
-            .prepare(
-                "SELECT files.path FROM files
-                JOIN tags ON files.path = tags.file_path
-                WHERE tags.tag = ?1",
-            )
-            .context("Failed to prepare list query")?;
-
-        let paths = stmt
-            .query_map([tag], |row| Ok(PathBuf::from(row.get::<_, String>(0)?)))?
-            .collect::<Result<Vec<_>, _>>()
-            .context("Failed to collect paths from query")?;
 
         Ok(paths)
     }
 
-    pub fn add_tags_batch(&mut self, paths: &[PathBuf], tag: &str) -> anyhow::Result<()> {
-        let tx = self.conn.transaction()?;
-        {
-            let mut files_stmt = tx.prepare("INSERT OR IGNORE INTO files (path) VALUES (?1)")?;
-
-            let mut tags_stmt =
-                tx.prepare("INSERT OR IGNORE INTO tags (file_path, tag) VALUES (?1, ?2)")?;
-
-            for path in paths {
-                let path_str = path.canonicalize()?.to_string_lossy().to_string();
-
-                files_stmt
-                    .execute([&path_str])
-                    .context("Failed inserting into table 'files'")?;
-
-                tags_stmt
-                    .execute([&path_str, tag])
-                    .context("Failed inserting into table 'tags'")?;
-            }
+    pub fn search_tags(
+        &self,
+        include_tags: &[&str],
+        exclude_tags: &[&str],
+        any: bool,
+    ) -> anyhow::Result<Vec<PathBuf>> {
+        if include_tags.is_empty() {
+            return Ok(Vec::new());
         }
-        tx.commit()?;
-        Ok(())
-    }
 
-    pub fn remove_tags_batch(&mut self, paths: &[PathBuf], tag: &str) -> anyhow::Result<()> {
-        let tx = self.conn.transaction()?;
-        {
-            // Prepare statements once for reuse
-            let mut tags_stmt = tx.prepare("DELETE FROM tags WHERE file_path = ?1 AND tag = ?2")?;
+        let include_placeholders = vec!["?"; include_tags.len()].join(",");
+        let exclude_placeholders = if !exclude_tags.is_empty() {
+            vec!["?"; exclude_tags.len()].join(",")
+        } else {
+            String::new()
+        };
 
-            let mut cleanup_stmt = tx.prepare(
-                "DELETE FROM files WHERE path = ?1 
-         AND NOT EXISTS (SELECT 1 FROM tags WHERE file_path = ?1)",
-            )?;
+        let having_clause = if any {
+            "HAVING COUNT(DISTINCT t.name) >= 1".into()
+        } else {
+            format!("HAVING COUNT(DISTINCT t.name) = {}", include_tags.len())
+        };
 
-            for path in paths {
-                let path_str = path.canonicalize()?.to_string_lossy().to_string();
+        let exclude_clause = if !exclude_tags.is_empty() {
+            format!(
+                "AND f.id NOT IN (
+                    SELECT f2.id FROM files f2
+                    JOIN file_tags ft2 ON f2.id = ft2.file_id
+                    JOIN tags t2 ON ft2.tag_id = t2.id
+                    WHERE t2.name IN ({})
+                )",
+                exclude_placeholders
+            )
+        } else {
+            String::new()
+        };
 
-                tags_stmt
-                    .execute([&path_str, tag])
-                    .context("Failed to remove tag")?;
+        let query = format!(
+            "SELECT DISTINCT f.path FROM files f
+             JOIN file_tags ft ON f.id = ft.file_id
+             JOIN tags t ON ft.tag_id = t.id
+             WHERE t.name IN ({})
+             {}
+             GROUP BY f.id
+             {}",
+            include_placeholders, exclude_clause, having_clause
+        );
 
-                cleanup_stmt
-                    .execute([&path_str])
-                    .context("Failed to clean up files table")?;
-            }
-        }
-        tx.commit()?;
-        Ok(())
+        let mut stmt = self.conn.prepare(&query)?;
+
+        let mut params: Vec<&dyn ToSql> = include_tags.iter().map(|s| s as &dyn ToSql).collect();
+        params.extend(exclude_tags.iter().map(|s| s as &dyn ToSql));
+
+        let paths = stmt
+            .query_map(params_from_iter(params), |row| {
+                let path_str: String = row.get(0)?;
+                Ok(PathBuf::from(path_str))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(paths)
     }
 }
 
@@ -452,6 +470,52 @@ mod tests {
 
         let results = store.search_tags(&[], &[], false)?;
         assert!(results.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_special_character_tags() -> Result<()> {
+        let mut store = setup_test_db()?;
+        let temp_dir = TempDir::new()?;
+        let test_file = temp_dir.path().join("test_file");
+        fs::write(&test_file, "test")?;
+
+        let special_tags = vec!["태그", "标签", "🏷️", "tag with spaces", "@#$%"];
+        for tag in special_tags {
+            store.add_tags_batch(&[test_file.clone()], tag)?;
+            let paths = store.list_tagged(tag)?;
+            assert_eq!(paths.len(), 1);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_symlink_path() -> Result<()> {
+        let mut store = setup_test_db()?;
+        let temp_dir = TempDir::new()?;
+
+        let real_file = temp_dir.path().join("real_file");
+        let symlink = temp_dir.path().join("symlink");
+        fs::write(&real_file, "test")?;
+        std::os::unix::fs::symlink(&real_file, &symlink)?;
+
+        store.add_tags_batch(&[symlink.clone()], "tag")?;
+        let paths = store.list_tagged("tag")?;
+        assert_eq!(paths[0], real_file.canonicalize()?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_large_tag_name() -> Result<()> {
+        let mut store = setup_test_db()?;
+        let temp_dir = TempDir::new()?;
+        let test_file = temp_dir.path().join("test_file");
+        fs::write(&test_file, "test")?;
+
+        let large_tag = "a".repeat(10000);
+        store.add_tags_batch(&[test_file], &large_tag)?;
 
         Ok(())
     }
