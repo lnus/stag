@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use ignore::WalkBuilder;
-use tagstore::{SearchMode, TagStore};
+use tagstore::TagStore;
 
 #[derive(Parser)]
 struct Cli {
@@ -49,6 +49,8 @@ enum Commands {
         dirs: bool,
         #[clap(long)]
         files: bool,
+        #[clap(short, long, num_args = 1..)]
+        exclude: Vec<String>,
     },
 }
 
@@ -98,6 +100,7 @@ fn handle_paths(
 
 // NOTE: Maybe this should be moved into the SQL layer?
 // However this function is pretty ripping fast O(n) so whatever?
+// Doing it in SQL is pretty much always better, but writing SQL is a pain
 fn filter_paths(paths: Vec<PathBuf>, dirs_only: bool, files_only: bool) -> Vec<PathBuf> {
     if !dirs_only && !files_only {
         return paths;
@@ -152,18 +155,21 @@ fn main() -> anyhow::Result<()> {
             any,
             dirs,
             files,
+            exclude,
         } => {
             if dirs && files {
                 return Err(anyhow::anyhow!("Cannot specify both --dirs and --files"));
             }
 
-            let mode = if any {
-                SearchMode::Any
-            } else {
-                SearchMode::All
-            };
-            let tag_refs: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
-            if let Ok(paths) = store.search_tags(&tag_refs, mode) {
+            // FIXME: Exclude tags should be calced in SQL
+            // However this is a pain in the ass.
+            // So for now, we get all, then exclude after.
+            // It's ugly and slower, but at least it works.
+            // See `TagStore::search_tags` for details
+            let include_tags: Vec<&str> = tags.iter().map(|s| s.as_str()).collect();
+            let exclude_tags: Vec<&str> = exclude.iter().map(|s| s.as_str()).collect();
+
+            if let Ok(paths) = store.search_tags(&include_tags, &exclude_tags, any) {
                 print_paths(&filter_paths(paths, dirs, files));
             }
         }

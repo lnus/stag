@@ -1,12 +1,11 @@
-# stag 🦌 - (S)tag Management Tool (WIP 🏗️)
-
-<p align="center">
+<div align="center">
+    <h1>stag 🦌</h1>
+    <span>(S)tag Management Tool (WIP 🏗️)</span>
+</div>
+<div align="center">
     <img src="https://c.tenor.com/r5c67WCHZZcAAAAC/tenor.gif" alt="Are you ready to become a stag"> 
-</p>
-
-<p align="center">
     <strong>⚠️ SECRET FRIENDS AND FAMILY EDITION ⚠️</strong>
-</p>
+</div>
 
 Q: What does the S stand for?
 A:
@@ -35,26 +34,32 @@ cargo install --path .
     - I'm 99% sure any 2021 version should work.
 - Just get [rustup](https://rustup.rs/) and install latest.
 
+## TODO's and scope creep 🛠️
+
+- [x] feat: Add negations in search
+- [ ] feat: Add a validate/clean command for broken tag-links
+- [ ] feat: Add metadata based autotagging (filetype, size, etc...)
+- [ ] feat: Some directory wathing, this is a huge *maybe* 
+- [ ] feat/fix: Add config from `$XDG_CONFIG_HOME`
+- [ ] perf: Make negations in search faster, this is slow for large searches
+- [ ] perf: Fix a bunch of the SQL queries in general
+- [ ] perf: Do all of the filtering directly in the SQL, rather than after (should be faster?)
+- [ ] refactor: Clean up the SQL queries, they are a pain to read
+- [ ] refactor: Split up stuff more cleanly (if needed)
+
 ## Usage
 
 ### Basic Tag Management
 
 ```bash
 # Tag directories
-stag a proj ~/Projects/*
-stag a rust ~/Projects/my-rust-project
-stag a wip ~/Projects/in-progress
-stag a docs ~/Projects/*/docs
-
-# Tag with multiple tags
-stag a rust ~/Projects/cool-project
-stag a wip ~/Projects/cool-project
+stag a proj ~/Projects/* # All/* now has the tag proj
+stag a rust ~/Projects/my-rust-project # This now has the tags proj && rust
 
 # Recursively tag all files in directory
-stag a -r rust ~/Projects/my-rust-project
-stag a -r rust ~/Projects/my-rust-project/src/*.rs
+stag a -r rust ~/Projects/my-rust-project # All files in my-rust-project now have the tag rust
 
-# Remove tags
+# Remove tags (same as above applies, in reverse)
 stag rm rust ~/Projects/old-project
 stag rm -r docs ~/Projects/*/docs
 ```
@@ -72,8 +77,8 @@ stag s proj --files   # Only show files
 # Find Rust projects
 stag s proj rust
 
-# Find Rust projects that are work-in-progress
-stag s proj rust wip
+# Find projects that NOT rust
+stag s proj -e rust
 
 # Find anything tagged either rust or docs (OR search)
 stag s rust docs --any

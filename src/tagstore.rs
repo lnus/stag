@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 use directories::ProjectDirs;
@@ -6,13 +9,6 @@ use rusqlite::{params_from_iter, Connection};
 
 pub struct TagStore {
     conn: Connection,
-}
-
-pub enum SearchMode {
-    /// AND
-    All,
-    /// OR
-    Any,
 }
 
 impl TagStore {
@@ -94,22 +90,41 @@ impl TagStore {
         Ok(())
     }
 
-    pub fn search_tags(&self, tags: &[&str], mode: SearchMode) -> anyhow::Result<Vec<PathBuf>> {
-        let query = match mode {
-            SearchMode::All => {
-                let conditions = (0..tags.len())
-                    .map(|i| format!("EXISTS (SELECT 1 FROM tags t{} WHERE t{}.file_path = files.path AND t{}.tag = ?{})", i, i, i, i+1))
-                    .collect::<Vec<_>>()
-                    .join(" AND ");
-                format!("SELECT DISTINCT path FROM files WHERE {}", conditions)
-            }
-            SearchMode::Any => {
-                let placeholders = (1..=tags.len())
-                    .map(|i| format!("?{}", i))
-                    .collect::<Vec<_>>()
-                    .join(",");
-                format!("SELECT DISTINCT files.path FROM files JOIN tags ON files.path = tags.file_path WHERE tags.tag IN ({})", placeholders)
-            }
+    // TODO: This is so unreadable and ugly
+    // Maybe we should separate some queries out into SQL files...
+    pub fn search_tags(
+        &self,
+        tags: &[&str],
+        excluded: &[&str],
+        any: bool,
+    ) -> anyhow::Result<Vec<PathBuf>> {
+        let query = if any {
+            let placeholders = (1..=tags.len())
+                .map(|i| format!("?{}", i))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                "SELECT DISTINCT files.path FROM files JOIN tags \
+                    ON files.path = tags.file_path \
+                    WHERE tags.tag IN ({})",
+                placeholders
+            )
+        } else {
+            let conditions = (0..tags.len())
+                .map(|i| {
+                    format!(
+                        "EXISTS (SELECT 1 FROM tags t{} \
+                            WHERE t{}.file_path = files.path \
+                            AND t{}.tag = ?{})",
+                        i,
+                        i,
+                        i,
+                        i + 1
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" AND ");
+            format!("SELECT DISTINCT path FROM files WHERE {}", conditions)
         };
 
         let mut stmt = self.conn.prepare(&query)?;
@@ -119,7 +134,34 @@ impl TagStore {
             })?
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(paths)
+        // FIXME: This is giga-fugly filtering
+        // But as long as it works, I'm kind of happy.
+        // This does n SQL queries for tags...
+        // Using -exclude is a performance loss now
+        let filtered_paths = paths
+            .into_iter()
+            .filter(|path| {
+                let path_tags = self.get_tags(path).unwrap_or_default();
+                !excluded
+                    .iter()
+                    .any(|&exclude_tag| path_tags.contains(exclude_tag))
+            })
+            .collect();
+
+        Ok(filtered_paths)
+    }
+
+    fn get_tags(&self, path: &Path) -> anyhow::Result<HashSet<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT tag FROM tags WHERE file_path = ?")?;
+        let tags = stmt
+            .query_map([path.to_string_lossy().as_ref()], |row| {
+                row.get::<_, String>(0)
+            })?
+            .filter_map(Result::ok)
+            .collect();
+        Ok(tags)
     }
 
     pub fn list_tagged(&self, tag: &str) -> anyhow::Result<Vec<PathBuf>> {
