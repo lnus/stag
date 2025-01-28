@@ -1,13 +1,18 @@
-<div align="center">
-    <h1>stag 🦌</h1>
-    <span>(S)tag Management Tool (WIP 🏗️)</span>
-</div>
-<div align="center">
+<h1 align="center">
+    stag 🦌 | WIP 🏗️
+</h1>
+<p align="center">
+    (S)Tag Management Tool
+</p>
+<p align="center">
     <img src="https://c.tenor.com/r5c67WCHZZcAAAAC/tenor.gif" alt="Are you ready to become a stag"> 
+</p>
+<p align="center">
     <strong>⚠️ SECRET FRIENDS AND FAMILY EDITION ⚠️</strong>
-</div>
+</p>
 
-Q: What does the S stand for?
+Q: What does the **S** stand for?
+
 A:
 - Super
 - Sorting
