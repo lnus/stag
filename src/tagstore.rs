@@ -46,50 +46,6 @@ impl TagStore {
         Ok(Self { conn })
     }
 
-    #[allow(dead_code)]
-    pub fn add_tag(&self, path: PathBuf, tag: &str) -> anyhow::Result<()> {
-        let path_str = path.canonicalize()?.to_string_lossy().to_string();
-
-        self.conn
-            .execute(
-                "INSERT OR IGNORE INTO files (path) VALUES (?1)",
-                [&path_str],
-            )
-            .context("Failed inserting into table 'files'")?;
-
-        self.conn
-            .execute(
-                "INSERT OR IGNORE INTO tags (file_path, tag) VALUES (?1, ?2)",
-                [&path_str, tag],
-            )
-            .context("Failed inserting into table 'tags'")?;
-
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub fn remove_tag(&self, path: PathBuf, tag: &str) -> anyhow::Result<()> {
-        let path_str = path.canonicalize()?.to_string_lossy().to_string();
-
-        self.conn
-            .execute(
-                "DELETE FROM tags WHERE file_path = ?1 AND tag = ?2",
-                [&path_str, tag],
-            )
-            .context("Failed to remove tag")?;
-
-        // Clean up from files table if no more tag remains for the file
-        self.conn
-            .execute(
-                "DELETE FROM files WHERE path = ?1 
-                 AND NOT EXISTS (SELECT 1 FROM tags WHERE file_path = ?1)",
-                [&path_str],
-            )
-            .context("Failed to clean up files table")?;
-
-        Ok(())
-    }
-
     // TODO: This is so unreadable and ugly
     // Maybe we should separate some queries out into SQL files...
     pub fn search_tags(
@@ -248,12 +204,12 @@ mod tests {
 
     #[test]
     fn test_add_and_list_tag() -> anyhow::Result<()> {
-        let store = setup_test_db()?;
+        let mut store = setup_test_db()?;
         let temp_dir = TempDir::new()?;
         let test_file = temp_dir.path().join("test_file");
         fs::write(&test_file, "test content")?;
 
-        store.add_tag(test_file.clone(), "test_tag")?;
+        store.add_tags_batch(&[test_file.clone()], "test_tag")?;
         let paths = store.list_tagged("test_tag")?;
 
         assert_eq!(paths.len(), 1);
@@ -263,13 +219,13 @@ mod tests {
 
     #[test]
     fn test_multiple_tags_same_file() -> anyhow::Result<()> {
-        let store = setup_test_db()?;
+        let mut store = setup_test_db()?;
         let temp_dir = TempDir::new()?;
         let test_file = temp_dir.path().join("test_file");
         fs::write(&test_file, "test content")?;
 
-        store.add_tag(test_file.clone(), "tag1")?;
-        store.add_tag(test_file.clone(), "tag2")?;
+        store.add_tags_batch(&[test_file.clone()], "tag1")?;
+        store.add_tags_batch(&[test_file.clone()], "tag2")?;
 
         let paths1 = store.list_tagged("tag1")?;
         let paths2 = store.list_tagged("tag2")?;
@@ -282,15 +238,15 @@ mod tests {
 
     #[test]
     fn test_same_tag_multiple_files() -> anyhow::Result<()> {
-        let store = setup_test_db()?;
+        let mut store = setup_test_db()?;
         let temp_dir = TempDir::new()?;
         let file1 = temp_dir.path().join("file1");
         let file2 = temp_dir.path().join("file2");
         fs::write(&file1, "test content")?;
         fs::write(&file2, "test content")?;
 
-        store.add_tag(file1.clone(), "shared_tag")?;
-        store.add_tag(file2.clone(), "shared_tag")?;
+        store.add_tags_batch(&[file1.clone()], "shared_tag")?;
+        store.add_tags_batch(&[file2.clone()], "shared_tag")?;
 
         let paths = store.list_tagged("shared_tag")?;
         assert_eq!(paths.len(), 2);
@@ -301,13 +257,13 @@ mod tests {
 
     #[test]
     fn test_remove_tag() -> anyhow::Result<()> {
-        let store = setup_test_db()?;
+        let mut store = setup_test_db()?;
         let temp_dir = TempDir::new()?;
         let test_file = temp_dir.path().join("test_file");
         fs::write(&test_file, "test content")?;
 
-        store.add_tag(test_file.clone(), "test_tag")?;
-        store.remove_tag(test_file, "test_tag")?;
+        store.add_tags_batch(&[test_file.clone()], "test_tag")?;
+        store.remove_tags_batch(&[test_file.clone()], "test_tag")?;
 
         let paths = store.list_tagged("test_tag")?;
         assert!(paths.is_empty());
@@ -316,40 +272,40 @@ mod tests {
 
     #[test]
     fn test_remove_nonexistent_tag() -> anyhow::Result<()> {
-        let store = setup_test_db()?;
+        let mut store = setup_test_db()?;
         let temp_dir = TempDir::new()?;
         let test_file = temp_dir.path().join("test_file");
         fs::write(&test_file, "test content")?;
 
         // Should not error when removing non-existent tag
-        store.remove_tag(test_file, "nonexistent_tag")?;
+        store.remove_tags_batch(&[test_file], "nonexistent_tag")?;
         Ok(())
     }
 
     #[test]
     fn test_invalid_path() {
-        let store = setup_test_db().unwrap();
-        let result = store.add_tag(PathBuf::from("/definitely/not/a/real/path"), "tag");
+        let mut store = setup_test_db().unwrap();
+        let result = store.add_tags_batch(&[PathBuf::from("/definitely/not/a/real/path")], "tag");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_cleanup_after_last_tag_removed() -> anyhow::Result<()> {
-        let store = setup_test_db()?;
+        let mut store = setup_test_db()?;
         let temp_dir = TempDir::new()?;
         let test_file = temp_dir.path().join("test_file");
         fs::write(&test_file, "test content")?;
 
-        store.add_tag(test_file.clone(), "tag1")?;
-        store.add_tag(test_file.clone(), "tag2")?;
+        store.add_tags_batch(&[test_file.clone()], "tag1")?;
+        store.add_tags_batch(&[test_file.clone()], "tag2")?;
 
-        store.remove_tag(test_file.clone(), "tag1")?;
+        store.remove_tags_batch(&[test_file.clone()], "tag1")?;
 
         // File should still exist in files table
         let paths = store.list_tagged("tag2")?;
         assert_eq!(paths.len(), 1);
 
-        store.remove_tag(test_file.clone(), "tag2")?;
+        store.remove_tags_batch(&[test_file.clone()], "tag2")?;
 
         // File should be cleaned up
         let paths = store.list_tagged("tag2")?;
