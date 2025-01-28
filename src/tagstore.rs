@@ -34,14 +34,21 @@ impl TagStore {
     }
 
     pub fn new() -> anyhow::Result<Self> {
-        let proj_dirs = ProjectDirs::from("com", "stag", "stag")
-            .ok_or_else(|| anyhow::anyhow!("Could not determine project directories"))?;
+        // NOTE: This is primarily for integration testing.
+        // But you can also use it outside of it.
+        // Not fully supported yet but it should work fine.
+        let conn = if let Ok(path) = std::env::var("STAG_DB_PATH") {
+            Connection::open(path)?
+        } else {
+            let proj_dirs = ProjectDirs::from("com", "stag", "stag")
+                .ok_or_else(|| anyhow::anyhow!("Could not determine project directories"))?;
 
-        let data_dir = proj_dirs.data_dir();
-        std::fs::create_dir_all(data_dir).context("Failed the create data directory")?;
+            let data_dir = proj_dirs.data_dir();
+            std::fs::create_dir_all(data_dir).context("Failed the create data directory")?;
 
-        let db_path = data_dir.join("tags.db");
-        let conn = Connection::open(db_path)?;
+            Connection::open(data_dir.join("tags.db"))?
+        };
+
         Self::init_db(&conn)?;
         Ok(Self { conn })
     }
