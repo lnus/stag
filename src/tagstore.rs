@@ -54,6 +54,10 @@ impl TagStore {
         excluded: &[&str],
         any: bool,
     ) -> anyhow::Result<Vec<PathBuf>> {
+        if tags.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let query = if any {
             let placeholders = (1..=tags.len())
                 .map(|i| format!("?{}", i))
@@ -310,6 +314,138 @@ mod tests {
         // File should be cleaned up
         let paths = store.list_tagged("tag2")?;
         assert!(paths.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_operations() -> anyhow::Result<()> {
+        let mut store = setup_test_db()?;
+        let temp_dir = TempDir::new()?;
+        let files: Vec<PathBuf> = (0..5)
+            .map(|i| {
+                let path = temp_dir.path().join(format!("file{}", i));
+                fs::write(&path, "test").unwrap();
+                path
+            })
+            .collect();
+
+        // Test batch add
+        store.add_tags_batch(&files, "batch_tag")?;
+        let tagged = store.list_tagged("batch_tag")?;
+        assert_eq!(tagged.len(), 5);
+
+        // Test batch remove
+        store.remove_tags_batch(&files[0..2], "batch_tag")?;
+        let remaining = store.list_tagged("batch_tag")?;
+        assert_eq!(remaining.len(), 3);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_transaction_rollback() -> anyhow::Result<()> {
+        let mut store = setup_test_db()?;
+        let temp_dir = TempDir::new()?;
+        let valid_file = temp_dir.path().join("valid");
+        fs::write(&valid_file, "test")?;
+
+        let paths = vec![valid_file, PathBuf::from("/nonexistent/path")];
+
+        // Should fail and rollback due to invalid path
+        assert!(store.add_tags_batch(&paths, "tag").is_err());
+
+        // Verify nothing was committed
+        let tagged = store.list_tagged("tag")?;
+        assert!(tagged.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_tags_any() -> anyhow::Result<()> {
+        let mut store = setup_test_db()?;
+        let temp_dir = TempDir::new()?;
+
+        let files: Vec<PathBuf> = (0..3)
+            .map(|i| {
+                let path = temp_dir.path().join(format!("file{}", i));
+                fs::write(&path, "test").unwrap();
+                path
+            })
+            .collect();
+
+        store.add_tags_batch(&[files[0].clone()], "tag1")?;
+        store.add_tags_batch(&[files[1].clone()], "tag2")?;
+        store.add_tags_batch(&[files[2].clone()], "tag3")?;
+        store.add_tags_batch(&files[0..2], "common")?;
+
+        // Test OR search
+        let results = store.search_tags(&["tag1", "tag2"], &[], true)?;
+        assert_eq!(results.len(), 2);
+        assert!(results.contains(&files[0].canonicalize()?));
+        assert!(results.contains(&files[1].canonicalize()?));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_tags_all() -> anyhow::Result<()> {
+        let mut store = setup_test_db()?;
+        let temp_dir = TempDir::new()?;
+
+        let file1 = temp_dir.path().join("file1");
+        fs::write(&file1, "test")?;
+
+        // File with both tags
+        store.add_tags_batch(&[file1.clone()], "tag1")?;
+        store.add_tags_batch(&[file1.clone()], "tag2")?;
+
+        // Test AND search
+        let results = store.search_tags(&["tag1", "tag2"], &[], false)?;
+        assert_eq!(results.len(), 1);
+        assert!(results.contains(&file1.canonicalize()?));
+
+        // Should return empty when searching for non-existent combination
+        let results = store.search_tags(&["tag1", "nonexistent"], &[], false)?;
+        assert!(results.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_tags_with_exclusions() -> anyhow::Result<()> {
+        let mut store = setup_test_db()?;
+        let temp_dir = TempDir::new()?;
+
+        let files: Vec<PathBuf> = (0..2)
+            .map(|i| {
+                let path = temp_dir.path().join(format!("file{}", i));
+                fs::write(&path, "test").unwrap();
+                path
+            })
+            .collect();
+
+        store.add_tags_batch(&files, "include")?;
+        store.add_tags_batch(&[files[1].clone()], "exclude")?;
+
+        let results = store.search_tags(&["include"], &["exclude"], true)?;
+        assert_eq!(results.len(), 1);
+        assert!(results.contains(&files[0].canonicalize()?));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_tags_empty() -> anyhow::Result<()> {
+        let store = setup_test_db()?;
+
+        // Empty searches should return empty results
+        let results = store.search_tags(&[], &[], true)?;
+        assert!(results.is_empty());
+
+        let results = store.search_tags(&[], &[], false)?;
+        assert!(results.is_empty());
+
         Ok(())
     }
 }
