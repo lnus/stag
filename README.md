@@ -14,6 +14,7 @@
 Q: What does the **S** stand for?
 
 A:
+
 - Super
 - Sorting
 - Storage
@@ -36,7 +37,7 @@ cargo install --path .
 ### Requirements
 
 - Rust Version: 🤔 I'm running `rustc 1.83.0`, so that or higher I guess.
-    - I'm 99% sure any 2021 version should work.
+  - I'm 99% sure any 2021 version should work.
 - Just get [rustup](https://rustup.rs/) and install latest.
 
 ## TODO's and scope creep 🛠️
@@ -44,8 +45,11 @@ cargo install --path .
 - [x] feat: Add negations in search
 - [ ] feat: Add a validate/clean command for broken tag-links
 - [ ] feat: Add metadata based autotagging (filetype, size, etc...)
-- [ ] feat: Some directory wathing, this is a huge *maybe* 
+- [ ] feat: Some directory wathing, this is a huge _maybe_
+- [ ] feat: A display of all current active tags
+- [ ] feat: Graph visualisation of all current active tags?
 - [ ] feat/fix: Add config from `$XDG_CONFIG_HOME`
+- [ ] fix: Validate tag names and CaSeS of them
 - [ ] perf: Make negations in search faster, this is slow for large searches
 - [ ] perf: Fix a bunch of the SQL queries in general
 - [ ] perf: Do all of the filtering directly in the SQL, rather than after (should be faster?)
@@ -128,19 +132,11 @@ stag s images --files | xargs du -sh | sort -hr
 # 1.2G    ~/Images/react-logo.svg
 # 8.0K    ~/Images/mymom.webp
 
+# Copy all directories into a new location for backup
+stag s proj --dirs | xargs -I {} cp {} . -r
+
 # Check git status across multiple projects
 stag s proj --dirs | xargs -I{} sh -c 'echo "=== {} ===" && cd {} && git status'
-# Output:
-# === ~/Projects/cli-tools ===
-# On branch main
-# Changes not staged for commit:
-#   modified:   src/main.rs
-#
-# === ~/Projects/web-app ===
-# On branch feature/auth
-# Your branch is up to date with 'origin/feature/auth'
-# nothing to commit, working tree clean
-
 
 # Format all Rust projects
 stag s proj rust --dirs | xargs -I{} cargo fmt --manifest-path {}/Cargo.toml
