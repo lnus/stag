@@ -28,7 +28,7 @@ A: Super, Storage, Sorting, System, Stag (recursive)
 - [x] perf: Make negations in search faster, this is slow for large searches
 - [x] perf: Fix a bunch of the SQL queries in general
 - [x] refactor: Clean up the SQL queries, they are a pain to read
-- [ ] refactor: Split up stuff more cleanly (if needed)
+- [x] refactor: Split up stuff more cleanly
 
 ## Installation
 
