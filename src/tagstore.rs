@@ -8,49 +8,26 @@ pub struct TagStore {
     conn: Connection,
 }
 
+// SQL inject me, whatever
+// It's a local bundled database, why validate 5Head
+mod schemas {
+    pub const INIT_SQL: &str = include_str!("./sql/schema/init.sql");
+}
+
+mod queries {
+    pub const REMOVE_TAGS: &str = include_str!("./sql/queries/remove_tags.sql");
+    pub const LIST_TAGS: &str = include_str!("./sql/queries/list_tags.sql");
+}
+
+mod templates {
+    pub const EXCLUDE_CLAUSE: &str = include_str!("./sql/templates/exclude_clause.sql");
+    pub const SEARCH_QUERY: &str = include_str!("./sql/templates/search_query.sql");
+}
+
 impl TagStore {
     fn init_db(conn: &Connection) -> Result<()> {
-        // NOTE: Using `PRAGMA auto_vacuum = FULL` will automatically reclaim space when records are deleted.
-        // This has a small performance overhead but keeps the database file size minimal.
-        // If storage becomes an issue, consider re-adding this
-        // After running a few tests I've noticed it doesn't really matter for size
-        // conn.execute("PRAGMA auto_vacuum = FULL", [])?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS files (
-                id      INTEGER PRIMARY KEY,
-                path    TEXT NOT NULL UNIQUE
-            )",
-            [],
-        )
-        .context("Failed creating table 'files'")?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS tags (
-                id      INTEGER PRIMARY KEY,
-                name    TEXT NOT NULL UNIQUE
-            )",
-            [],
-        )
-        .context("Failed creating table 'tags'")?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS file_tags (
-                file_id INTEGER,
-                tag_id  INTEGER,
-                PRIMARY KEY (file_id, tag_id),
-                FOREIGN KEY (file_id)   REFERENCES files(id)    ON DELETE CASCADE,
-                FOREIGN KEY (tag_id)    REFERENCES tags(id)     ON DELETE CASCADE
-            )",
-            [],
-        )
-        .context("Failed creating table 'file_tags'")?;
-
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag_id)",
-            [],
-        )
-        .context("Failed creating indexes for 'file_tags'")?;
+        conn.execute_batch(schemas::INIT_SQL)
+            .context("Failed to initialize the database schema")?;
 
         Ok(())
     }
@@ -121,11 +98,7 @@ impl TagStore {
     pub fn remove_tags_batch(&mut self, paths: &[PathBuf], tag: &str) -> Result<()> {
         let tx = self.conn.transaction()?;
         {
-            let mut stmt = tx.prepare(
-                "DELETE FROM file_tags
-                WHERE file_id IN (SELECT id FROM files WHERE path = ?1)
-                AND tag_id IN (SELECT id FROM tags WHERE name = ?2)",
-            )?;
+            let mut stmt = tx.prepare(queries::REMOVE_TAGS)?;
 
             for path in paths {
                 let canonical_path = path.canonicalize().context("Failed to canonicalize path")?;
@@ -138,12 +111,7 @@ impl TagStore {
     }
 
     pub fn list_tagged(&self, tag: &str) -> Result<Vec<PathBuf>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT f.path FROM files f
-             JOIN file_tags ft ON f.id = ft.file_id
-             JOIN tags t ON ft.tag_id = t.id
-             WHERE t.name = ?1",
-        )?;
+        let mut stmt = self.conn.prepare(queries::LIST_TAGS)?;
 
         let paths = stmt
             .query_map([tag], |row| {
@@ -179,29 +147,15 @@ impl TagStore {
         };
 
         let exclude_clause = if !exclude_tags.is_empty() {
-            format!(
-                "AND f.id NOT IN (
-                    SELECT f2.id FROM files f2
-                    JOIN file_tags ft2 ON f2.id = ft2.file_id
-                    JOIN tags t2 ON ft2.tag_id = t2.id
-                    WHERE t2.name IN ({})
-                )",
-                exclude_placeholders
-            )
+            templates::EXCLUDE_CLAUSE.replace("{exclude_placeholders}", &exclude_placeholders)
         } else {
             String::new()
         };
 
-        let query = format!(
-            "SELECT DISTINCT f.path FROM files f
-             JOIN file_tags ft ON f.id = ft.file_id
-             JOIN tags t ON ft.tag_id = t.id
-             WHERE t.name IN ({})
-             {}
-             GROUP BY f.id
-             {}",
-            include_placeholders, exclude_clause, having_clause
-        );
+        let query = templates::SEARCH_QUERY
+            .replace("{include_placeholders}", &include_placeholders)
+            .replace("{exclude_clause}", &exclude_clause)
+            .replace("{having_clause}", &having_clause);
 
         let mut stmt = self.conn.prepare(&query)?;
 
