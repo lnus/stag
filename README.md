@@ -25,6 +25,7 @@ A: Super, Storage, Sorting, System, Stag (recursive)
 - [ ] feat: Graph visualisation of all current active tags?
 - [ ] feat/fix: Add config from `$XDG_CONFIG_HOME`
 - [ ] fix: Validate tag names and CaSeS of them
+- [ ] fix: Fix recursion through symlinks
 - [x] perf: Make negations in search faster, this is slow for large searches
 - [x] perf: Fix a bunch of the SQL queries in general
 - [x] refactor: Clean up the SQL queries, they are a pain to read
