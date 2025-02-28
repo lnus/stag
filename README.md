@@ -13,20 +13,19 @@
 
 Q: What does the **S** stand for?
 
-A: Super, Storage, Sorting, System, Stag (recursive)
+A: Semantic, Storage, Sorting, System, Stag (recursive)
 
 ## TODO's and scope creep 🛠️
 
-- [x] feat: Add negations in search
+- [ ] feat: Directory watching using inotify
 - [ ] feat: Add a validate/clean command for broken tag-links
-- [x] feat: Add metadata based autotagging (filetype, size, etc...)
-- [ ] feat: Extend metadata based autotagging
-- [ ] feat: Some directory watching, this is a huge _maybe_
-- [ ] feat: A display of all current active tags
-- [ ] feat: Graph visualisation of all current active tags?
 - [ ] feat/fix: Add config from `$XDG_CONFIG_HOME`
 - [ ] fix: Validate tag names and CaSeS of them
 - [ ] fix: Fix recursion through symlinks
+- [x] feat: Add negations in search
+- [x] feat: Add metadata based autotagging (filetype, size, etc...)
+- [x] feat: Extend metadata based autotagging
+- [x] feat: A display of all current active tags
 - [x] perf: Make negations in search faster, this is slow for large searches
 - [x] perf: Fix a bunch of the SQL queries in general
 - [x] refactor: Clean up the SQL queries, they are a pain to read
@@ -96,6 +95,16 @@ stag ls docs --dirs   # Only directories
 stag ls docs --files  # Only files
 ```
 
+### Autotagging
+
+```bash
+# Stag allows for basic metadata autotagging
+stag at README.md
+
+# Inspecting this gives
+stag i README.md # small, mime:text/markdown, text, file, x-markdown, markdown, mime:text/x-markdown
+```
+
 ### Combining with Unix Tools
 
 ```bash
@@ -131,16 +140,16 @@ stag s proj rust --dirs | xargs -I{} cargo test --manifest-path {}/Cargo.toml
 ```bash
 # Quick project navigation function
 scd() {
-local tags="${1:-proj}"  # Default to 'proj' if no args
-local dir=$(stag s $tags --dirs | fzf)
-if [ -n "$dir" ]; then
-cd "$dir"
-fi
+    local tags="${1:-proj}"  # Default to 'proj' if no args
+    local dir=$(stag s $tags --dirs | fzf)
+    if [ -n "$dir" ]; then
+        cd "$dir"
+    fi
 }
 
 # Usage:
-rcd                    # Navigate tagged projects
-rcd "rust wip"         # Navigate WIP Rust projects
+scd                    # Navigate tagged projects
+scd "rust wip"         # Navigate WIP Rust projects
 ```
 
 ### Tips
