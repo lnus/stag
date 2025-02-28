@@ -387,3 +387,48 @@ fn test_hidden_files_handling() -> anyhow::Result<()> {
         Ok(())
     })
 }
+
+#[test]
+#[serial]
+fn test_autotag() -> anyhow::Result<()> {
+    with_test_env(|| {
+        // Create a temporary directory for the test
+        let temp_dir = TempDir::new()?;
+
+        // Create test files and directories
+        let test_file = temp_dir.path().join("test.txt");
+        let test_dir = temp_dir.path().join("test_dir");
+
+        // Write content to the test file
+        std::fs::write(&test_file, "test content")?;
+
+        // Create a directory
+        std::fs::create_dir(&test_dir)?;
+
+        // Normalize paths for comparison
+        let normalized_file_path = normalize_path(&test_file)?;
+        let normalized_dir_path = normalize_path(&test_dir)?;
+
+        // Run the autotag command on the temp directory
+        Command::cargo_bin("stag")?
+            .args(["at", temp_dir.path().to_str().unwrap(), "-r"])
+            .assert()
+            .success();
+
+        // Check that the "file" tag was applied to the test file
+        Command::cargo_bin("stag")?
+            .args(["ls", "file"])
+            .assert()
+            .success()
+            .stdout(predicates::str::contains(&normalized_file_path));
+
+        // Check that the "directory" tag was applied to the test directory
+        Command::cargo_bin("stag")?
+            .args(["ls", "directory"])
+            .assert()
+            .success()
+            .stdout(predicates::str::contains(&normalized_dir_path));
+
+        Ok(())
+    })
+}

@@ -18,22 +18,16 @@ pub(crate) enum PathAction {
     Remove,
 }
 
-pub(crate) fn handle_paths(
-    store: &mut TagStore,
-    tag: &str,
-    paths: Vec<PathBuf>,
-    action: PathAction,
-    recursive: bool,
-    hidden: bool,
-) -> Result<()> {
+/// Collects paths based on the given options (recursive, hidden).
+pub fn collect_paths(paths: Vec<PathBuf>, recursive: bool, hidden: bool) -> Result<Vec<PathBuf>> {
+    // FIX: Document this better
     // NOTE: Hidden flag only applies for recursive indexing
     // It doesn't really make sense if someone does ie.
     // `stag a tag .hidden` and it doesn't index.
     // Hidden is more for:
     // `stag a config .config -r --hidden`, which will now recurse
     // .config and add ALL files no matter ignore-rules
-    // FIX: Document this better ^
-    let paths: Vec<_> = if recursive {
+    let collected_paths: Vec<PathBuf> = if recursive {
         paths
             .iter()
             .flat_map(|path_pattern| {
@@ -48,6 +42,19 @@ pub(crate) fn handle_paths(
     } else {
         paths.into_iter().collect()
     };
+
+    Ok(collected_paths)
+}
+
+pub(crate) fn handle_paths(
+    store: &mut TagStore,
+    tag: &str,
+    paths: Vec<PathBuf>,
+    action: PathAction,
+    recursive: bool,
+    hidden: bool,
+) -> Result<()> {
+    let paths = collect_paths(paths, recursive, hidden)?;
 
     match action {
         PathAction::Add => store.add_tags_batch(&paths, &tag)?,

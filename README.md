@@ -19,7 +19,8 @@ A: Super, Storage, Sorting, System, Stag (recursive)
 
 - [x] feat: Add negations in search
 - [ ] feat: Add a validate/clean command for broken tag-links
-- [ ] feat: Add metadata based autotagging (filetype, size, etc...)
+- [x] feat: Add metadata based autotagging (filetype, size, etc...)
+- [ ] feat: Extend metadata based autotagging
 - [ ] feat: Some directory watching, this is a huge _maybe_
 - [ ] feat: A display of all current active tags
 - [ ] feat: Graph visualisation of all current active tags?

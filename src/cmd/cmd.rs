@@ -17,6 +17,8 @@ pub enum Commands {
     List(List),
     #[command(alias = "s")]
     Search(Search),
+    #[command(alias = "at")]
+    Autotag(Autotag),
 }
 
 #[derive(Parser)]
@@ -62,4 +64,14 @@ pub struct Search {
     pub files: bool,
     #[clap(short, long, num_args = 1..)]
     pub exclude: Vec<String>,
+}
+
+#[derive(Parser)]
+pub struct Autotag {
+    #[clap(required = true, num_args = 1..)]
+    pub paths: Vec<PathBuf>,
+    #[clap(short, long)]
+    pub recursive: bool,
+    #[clap(long)] // FIX: Think of a good short bind that doesn't overlap help
+    pub hidden: bool,
 }

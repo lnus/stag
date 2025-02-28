@@ -1,9 +1,9 @@
-use crate::tagstore::TagStore;
+use crate::{autotag::autotag_paths, tagstore::TagStore};
 use anyhow::{anyhow, Result};
 
 use super::{
     utils::{filter_paths, handle_paths, print_paths, PathAction},
-    Add, List, Remove, Search,
+    Add, Autotag, List, Remove, Search,
 };
 
 impl Add {
@@ -64,6 +64,16 @@ impl Search {
         if let Ok(paths) = store.search_tags(&include_tags, &exclude_tags, self.any) {
             print_paths(&filter_paths(paths, self.dirs, self.files));
         }
+
+        Ok(())
+    }
+}
+
+impl Autotag {
+    pub fn run(&self) -> Result<()> {
+        let mut store = TagStore::new()?;
+
+        autotag_paths(&mut store, self.paths.clone(), self.recursive, self.hidden)?;
 
         Ok(())
     }

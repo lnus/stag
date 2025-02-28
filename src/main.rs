@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cmd::{Cli, Run};
 
+mod autotag;
 mod cmd;
 mod tagstore;
 

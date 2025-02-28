@@ -5,6 +5,7 @@ mod utils;
 use anyhow::Result;
 
 pub use cmd::*;
+pub use utils::collect_paths;
 
 pub trait Run {
     fn run(&self) -> Result<()>;
@@ -17,6 +18,7 @@ impl Run for Commands {
             Commands::Remove(cmd) => cmd.run(),
             Commands::List(cmd) => cmd.run(),
             Commands::Search(cmd) => cmd.run(),
+            Commands::Autotag(cmd) => cmd.run(),
         }
     }
 }
