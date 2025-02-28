@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 
 use super::{
     utils::{filter_paths, handle_paths, print_paths, PathAction},
-    Add, Autotag, List, Remove, Search,
+    Add, Autotag, Inspect, List, Remove, Search,
 };
 
 impl Add {
@@ -74,6 +74,24 @@ impl Autotag {
         let mut store = TagStore::new()?;
 
         autotag_paths(&mut store, self.paths.clone(), self.recursive, self.hidden)?;
+
+        Ok(())
+    }
+}
+
+impl Inspect {
+    pub fn run(&self) -> Result<()> {
+        let store = TagStore::new()?;
+
+        for path in &self.paths {
+            if let Ok(tags) = store.get_file_tags(path) {
+                if self.verbose {
+                    print!("{}: ", path.display());
+                }
+
+                println!("{}", tags.join(", "));
+            }
+        }
 
         Ok(())
     }

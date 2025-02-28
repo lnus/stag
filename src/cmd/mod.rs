@@ -19,6 +19,7 @@ impl Run for Commands {
             Commands::List(cmd) => cmd.run(),
             Commands::Search(cmd) => cmd.run(),
             Commands::Autotag(cmd) => cmd.run(),
+            Commands::Inspect(cmd) => cmd.run(),
         }
     }
 }

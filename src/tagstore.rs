@@ -17,6 +17,7 @@ mod schemas {
 mod queries {
     pub const REMOVE_TAGS: &str = include_str!("./sql/queries/remove_tags.sql");
     pub const LIST_TAGS: &str = include_str!("./sql/queries/list_tags.sql");
+    pub const GET_FILE_TAGS: &str = include_str!("./sql/queries/get_file_tags.sql");
 }
 
 mod templates {
@@ -108,6 +109,17 @@ impl TagStore {
 
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn get_file_tags(&self, path: &PathBuf) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(queries::GET_FILE_TAGS)?;
+
+        let canonical_path = path.canonicalize().context("Failed to canonicalize path")?;
+        let tags = stmt
+            .query_map([canonical_path.to_string_lossy()], |row| row.get(0))?
+            .collect::<Result<Vec<String>, _>>()?;
+
+        Ok(tags)
     }
 
     pub fn list_tagged(&self, tag: &str) -> Result<Vec<PathBuf>> {

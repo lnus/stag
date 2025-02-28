@@ -1,3 +1,4 @@
+use anyhow::Result;
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serial_test::serial;
@@ -25,7 +26,7 @@ where
     result
 }
 
-fn normalize_path(path: &std::path::Path) -> anyhow::Result<String> {
+fn normalize_path(path: &std::path::Path) -> Result<String> {
     Ok(path
         .canonicalize()
         .map_err(|e| anyhow::anyhow!("Failed to canonicalize path: {}", e))?
@@ -37,7 +38,7 @@ fn normalize_path(path: &std::path::Path) -> anyhow::Result<String> {
 // I wrote it out to bootstrap the test_env functions and noramlize_path
 #[test]
 #[serial]
-fn test_add_and_list() -> anyhow::Result<()> {
+fn test_add_and_list() -> Result<()> {
     with_test_env(|| {
         let temp_dir = TempDir::new()?;
         let test_file = temp_dir.path().join("test.txt");
@@ -62,7 +63,32 @@ fn test_add_and_list() -> anyhow::Result<()> {
 
 #[test]
 #[serial]
-fn test_recursive_tagging() -> anyhow::Result<()> {
+fn test_add_and_inspect() -> Result<()> {
+    with_test_env(|| {
+        let temp_dir = TempDir::new()?;
+        let test_file = temp_dir.path().join("test.txt");
+        std::fs::write(&test_file, "test content")?;
+
+        let normalized_path = normalize_path(&test_file)?;
+
+        Command::cargo_bin("stag")?
+            .args(["add", "rust", &normalized_path])
+            .assert()
+            .success();
+
+        Command::cargo_bin("stag")?
+            .args(["inspect", &normalized_path])
+            .assert()
+            .success()
+            .stdout(predicates::str::contains("rust"));
+
+        Ok(())
+    })
+}
+
+#[test]
+#[serial]
+fn test_recursive_tagging() -> Result<()> {
     with_test_env(|| {
         let temp_dir = TempDir::new()?;
         let proj_dir = temp_dir.path().join("project");
@@ -90,7 +116,7 @@ fn test_recursive_tagging() -> anyhow::Result<()> {
 
 #[test]
 #[serial]
-fn test_tag_combinations() -> anyhow::Result<()> {
+fn test_tag_combinations() -> Result<()> {
     with_test_env(|| {
         let temp_dir = TempDir::new()?;
         let proj1 = temp_dir.path().join("rust-proj");
@@ -142,7 +168,7 @@ fn test_tag_combinations() -> anyhow::Result<()> {
 
 #[test]
 #[serial]
-fn test_tag_removal() -> anyhow::Result<()> {
+fn test_tag_removal() -> Result<()> {
     with_test_env(|| {
         let temp_dir = TempDir::new()?;
         let test_dir = temp_dir.path().join("test-dir");
@@ -187,7 +213,7 @@ fn test_tag_removal() -> anyhow::Result<()> {
 
 #[test]
 #[serial]
-fn test_dir_file_filtering() -> anyhow::Result<()> {
+fn test_dir_file_filtering() -> Result<()> {
     with_test_env(|| {
         let temp_dir = TempDir::new()?;
         let test_dir = temp_dir.path().join("test-dir");
@@ -226,7 +252,7 @@ fn test_dir_file_filtering() -> anyhow::Result<()> {
 
 #[test]
 #[serial]
-fn test_invalid_flag_combinations() -> anyhow::Result<()> {
+fn test_invalid_flag_combinations() -> Result<()> {
     with_test_env(|| {
         // Test --dirs and --files together (should fail)
         Command::cargo_bin("stag")?
@@ -247,7 +273,7 @@ fn test_invalid_flag_combinations() -> anyhow::Result<()> {
 
 #[test]
 #[serial]
-fn test_nonexistent_paths() -> anyhow::Result<()> {
+fn test_nonexistent_paths() -> Result<()> {
     with_test_env(|| {
         Command::cargo_bin("stag")?
             .args(["a", "test", "/path/that/does/not/exist"])
@@ -260,7 +286,7 @@ fn test_nonexistent_paths() -> anyhow::Result<()> {
 
 #[test]
 #[serial]
-fn test_empty_tag_results() -> anyhow::Result<()> {
+fn test_empty_tag_results() -> Result<()> {
     with_test_env(|| {
         // Search for non-existent tag should succeed but return empty
         Command::cargo_bin("stag")?
@@ -281,7 +307,7 @@ fn test_empty_tag_results() -> anyhow::Result<()> {
 
 #[test]
 #[serial]
-fn test_complex_search_combinations() -> anyhow::Result<()> {
+fn test_complex_search_combinations() -> Result<()> {
     with_test_env(|| {
         let temp_dir = TempDir::new()?;
         let file1 = temp_dir.path().join("file1");
@@ -328,7 +354,7 @@ fn test_complex_search_combinations() -> anyhow::Result<()> {
 
 #[test]
 #[serial]
-fn test_hidden_files_handling() -> anyhow::Result<()> {
+fn test_hidden_files_handling() -> Result<()> {
     // NOTE: This test looks weird, see note in `main.rs` about hidden
     with_test_env(|| {
         let temp_dir = TempDir::new()?;
@@ -390,7 +416,7 @@ fn test_hidden_files_handling() -> anyhow::Result<()> {
 
 #[test]
 #[serial]
-fn test_autotag() -> anyhow::Result<()> {
+fn test_autotag() -> Result<()> {
     with_test_env(|| {
         // Create a temporary directory for the test
         let temp_dir = TempDir::new()?;

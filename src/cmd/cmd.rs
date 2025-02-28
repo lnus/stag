@@ -19,6 +19,8 @@ pub enum Commands {
     Search(Search),
     #[command(alias = "at")]
     Autotag(Autotag),
+    #[command(alias = "i")]
+    Inspect(Inspect),
 }
 
 #[derive(Parser)]
@@ -74,4 +76,12 @@ pub struct Autotag {
     pub recursive: bool,
     #[clap(long)] // FIX: Think of a good short bind that doesn't overlap help
     pub hidden: bool,
+}
+
+#[derive(Parser)]
+pub struct Inspect {
+    #[clap(required = true, num_args = 1..)]
+    pub paths: Vec<PathBuf>,
+    #[clap(short, long)]
+    pub verbose: bool,
 }
