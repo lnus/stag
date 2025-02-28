@@ -395,39 +395,50 @@ fn test_autotag() -> anyhow::Result<()> {
         // Create a temporary directory for the test
         let temp_dir = TempDir::new()?;
 
-        // Create test files and directories
-        let test_file = temp_dir.path().join("test.txt");
-        let test_dir = temp_dir.path().join("test_dir");
+        let test_text_file = temp_dir.path().join("test.txt");
+        std::fs::write(&test_text_file, "This is some text content")?;
 
-        // Write content to the test file
-        std::fs::write(&test_file, "test content")?;
+        let test_image_file = temp_dir.path().join("image.png");
+        std::fs::write(&test_image_file, "fake image data")?;
 
-        // Create a directory
-        std::fs::create_dir(&test_dir)?;
+        let project_dir = temp_dir.path().join("my_project");
+        std::fs::create_dir(&project_dir)?;
 
-        // Normalize paths for comparison
-        let normalized_file_path = normalize_path(&test_file)?;
-        let normalized_dir_path = normalize_path(&test_dir)?;
+        let git_dir = project_dir.join(".git");
+        std::fs::create_dir(&git_dir)?;
 
-        // Run the autotag command on the temp directory
+        let norm_text_path = normalize_path(&test_text_file)?;
+        let norm_image_path = normalize_path(&test_image_file)?;
+        let norm_project_path = normalize_path(&project_dir)?;
+
         Command::cargo_bin("stag")?
             .args(["at", temp_dir.path().to_str().unwrap(), "-r"])
             .assert()
             .success();
 
-        // Check that the "file" tag was applied to the test file
         Command::cargo_bin("stag")?
-            .args(["ls", "file"])
+            .args(["s", "file", "text", "small"])
             .assert()
             .success()
-            .stdout(predicates::str::contains(&normalized_file_path));
+            .stdout(predicates::str::contains(&norm_text_path));
 
-        // Check that the "directory" tag was applied to the test directory
         Command::cargo_bin("stag")?
-            .args(["ls", "directory"])
+            .args(["s", "file", "image", "small"])
             .assert()
             .success()
-            .stdout(predicates::str::contains(&normalized_dir_path));
+            .stdout(predicates::str::contains(&norm_image_path));
+
+        Command::cargo_bin("stag")?
+            .args(["s", "mime:image/png"])
+            .assert()
+            .success()
+            .stdout(predicates::str::contains(&norm_image_path));
+
+        Command::cargo_bin("stag")?
+            .args(["s", "directory", "git"])
+            .assert()
+            .success()
+            .stdout(predicates::str::contains(&norm_project_path));
 
         Ok(())
     })
