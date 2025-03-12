@@ -8,9 +8,12 @@ use std::{
 use crate::{cmd::collect_paths, tagstore::TagStore};
 use mime_guess::MimeGuess;
 
+// TODO: Consider how this error handles
+
 pub fn autotag_paths(
     store: &mut TagStore,
     paths: Vec<PathBuf>,
+    preview: bool,
     recursive: bool,
     hidden: bool,
 ) -> Result<()> {
@@ -27,8 +30,20 @@ pub fn autotag_paths(
         }
     }
 
-    for (tag, paths) in tag_map {
-        store.add_tags_batch(&paths, &tag)?;
+    if preview {
+        print!("[PREVIEW, NO CHANGES MADE] got tags: ");
+        let keys_str = tag_map
+            .keys()
+            .map(|k| k.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("{}", keys_str);
+    }
+
+    if !preview {
+        for (tag, paths) in tag_map {
+            store.add_tags_batch(&paths, &tag)?;
+        }
     }
 
     Ok(())

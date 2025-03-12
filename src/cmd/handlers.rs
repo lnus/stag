@@ -73,7 +73,13 @@ impl Autotag {
     pub fn run(&self) -> Result<()> {
         let mut store = TagStore::new()?;
 
-        autotag_paths(&mut store, self.paths.clone(), self.recursive, self.hidden)?;
+        autotag_paths(
+            &mut store,
+            self.paths.clone(),
+            self.preview, // TODO: Possibly remove? Just messing with something
+            self.recursive,
+            self.hidden,
+        )?;
 
         Ok(())
     }

@@ -74,6 +74,8 @@ pub struct Autotag {
     pub paths: Vec<PathBuf>,
     #[clap(short, long)]
     pub recursive: bool,
+    #[clap(short, long)]
+    pub preview: bool,
     #[clap(long)] // FIX: Think of a good short bind that doesn't overlap help
     pub hidden: bool,
 }
