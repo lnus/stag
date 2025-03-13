@@ -31,19 +31,19 @@ pub fn autotag_paths(
     }
 
     if preview {
-        print!("[PREVIEW, NO CHANGES MADE] got tags: ");
+        print!("[PREVIEW, NO CHANGES] got tags: ");
         let keys_str = tag_map
             .keys()
             .map(|k| k.as_str())
             .collect::<Vec<_>>()
             .join(", ");
         println!("{}", keys_str);
+
+        return Ok(());
     }
 
-    if !preview {
-        for (tag, paths) in tag_map {
-            store.add_tags_batch(&paths, &tag)?;
-        }
+    for (tag, paths) in tag_map {
+        store.add_tags_batch(&paths, &tag)?;
     }
 
     Ok(())
